@@ -59,34 +59,42 @@ const main = async (region: string, model: string, imei: string): Promise<void> 
     decrypted: "",
   };
 
+  const cookiesMap = new Map<string, string>(); // Add session cookie jar
+
   const headers: Record<string, string> = {
     "User-Agent": "Kies2.0_FUS",
+    "X-FUS-Protocol-Ver": "2.0",
   };
 
   const handleHeaders = (responseHeaders: any) => {
     if (responseHeaders.nonce != null) {
       const { Authorization, nonce: newNonce } =
-        handleAuthRotation(responseHeaders);
+      handleAuthRotation(responseHeaders);
 
       Object.assign(nonce, newNonce);
       headers.Authorization = Authorization;
     }
 
-    const sessionID = responseHeaders["set-cookie"]
-      ?.find((cookie: string) => cookie.startsWith("JSESSIONID"))
-      ?.split(";")[0];
+    // Persist ALL cookies (JSESSIONID + Akamai/WAF bot cookies)
+    if (responseHeaders["set-cookie"]) {
+      responseHeaders["set-cookie"].forEach((cookieStr: string) => {
+        const cookie = cookieStr.split(";")[0];
+        const [key, ...val] = cookie.split("=");
+        cookiesMap.set(key, val.join("="));
+      });
 
-    if (sessionID != null) {
-      headers.Cookie = sessionID;
+      headers.Cookie = Array.from(cookiesMap.entries())
+      .map(([k, v]) => `${k}=${v}`)
+      .join("; ");
     }
   };
-
   await axios
     .post("https://neofussvr.sslcs.cdngc.net/NF_DownloadGenerateNonce.do", "", {
       headers: {
         Authorization:
           'FUS nonce="", signature="", nc="", type="", realm="", newauth="1"',
         "User-Agent": "Kies2.0_FUS",
+        "X-FUS-Protocol-Ver": "2.0",
         Accept: "application/xml",
       },
     })
@@ -174,13 +182,17 @@ const main = async (region: string, model: string, imei: string): Promise<void> 
   );
 
   await axios
-    .get(
-      `http://cloud-neofussvr.samsungmobile.com/NF_DownloadBinaryForMass.do?file=${binaryModelPath}${binaryFilename}`,
-      {
-        headers,
-        responseType: "stream",
-      }
-    )
+  .get(
+    `http://cloud-neofussvr.samsungmobile.com/NF_DownloadBinaryForMass.do?file=${binaryModelPath}${binaryFilename}`,
+    {
+      headers: {
+        ...headers,
+        // Manually inject the encrypted nonce ONLY for the final download stream
+        Authorization: headers.Authorization.replace('nonce=""', `nonce="${nonce.encrypted}"`),
+      },
+      responseType: "stream",
+    }
+  )
     .then((res: AxiosResponse) => {
       const outputFolder = `${process.cwd()}/${model}_${region}/`;
       console.log();

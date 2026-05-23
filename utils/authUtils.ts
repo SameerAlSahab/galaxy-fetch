@@ -1,7 +1,7 @@
 import crypto from "crypto";
 
-const NONCE_KEY = "vicopx7dqu06emacgpnpy8j8zwhduwlh";
-const AUTH_KEY = "9u7qab84rpc16gvk";
+const NONCE_KEY = "jqw2zntssasudk3zuwwx4tnqz5h3b6i4";
+const AUTH_KEY = "ifzg4ovyl3cyl3a5";
 
 export const decryptNonce = (nonceEncrypted: string): string => {
   const nonceDecipher = crypto.createDecipheriv(
@@ -47,7 +47,8 @@ export const handleAuthRotation = (
   const authorization = getAuthorization(nonceDecrypted);
 
   return {
-    Authorization: `FUS nonce="${nonce}", signature="${authorization}", nc="", type="", realm="", newauth="1"`,
+    // Keep nonce empty for Inform/Init requests to prevent 401 rejections
+    Authorization: `FUS nonce="", signature="${authorization}", nc="", type="", realm="", newauth="1"`,
     nonce: {
       decrypted: nonceDecrypted,
       encrypted: nonce,
